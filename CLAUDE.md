@@ -4,34 +4,66 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Python project for converting images and video frames to ASCII art. The `frames/` directory contains 328 JPEG frames extracted from `sailing.MP4`. The current script (`converter.py`) converts a PNG profile image to ASCII art using the `ascii_magic` library.
+An SSH-accessible terminal portfolio at diego.boats with a sailing-themed interactive TUI. Features a color ASCII video loop of sailing footage alongside navigable content sections, built with Node.js (Ink/React for CLIs) and an ssh2 server.
 
 ## Environment Setup
 
-Python 3.12 with a local virtualenv:
+### Node.js (main runtime)
 
 ```bash
-# Activate the virtual environment
-source .venv/bin/activate
+npm install
+```
 
-# Install dependencies (if setting up fresh)
+### Python (build-time pre-rendering only)
+
+```bash
+source .venv/bin/activate
 pip install ascii_magic pillow
 ```
 
-## Running the Script
+### Pre-render frames (one-time, generates frames.bin)
 
 ```bash
 source .venv/bin/activate
-python converter.py
+python prerender.py
+```
+
+## Running
+
+### Start SSH server locally
+
+```bash
+# First, generate a host key (one-time):
+mkdir -p .ssh
+ssh-keygen -t ed25519 -f .ssh/host_key -N ""
+
+# Start the server:
+node src/server.js
+```
+
+### Run tests
+
+```bash
+npm test
 ```
 
 ## Key Files
 
-- `converter.py` — main script; converts `diego_profile.png` to ASCII art, outputs to terminal and `profile_out.png`
-- `frames/frame_XXXX.jpg` — 328 sequential video frames (extracted from `sailing.MP4`) for potential ASCII animation use
-- `sailing.MP4` — source video for the frames
-- `diego_profile.png` — source profile image (~40MB PNG)
+- `src/server.js` — ssh2 server entry point; renders Ink TUI per SSH connection
+- `src/App.jsx` — root Ink component with section navigation
+- `src/components/Layout.jsx` — split-panel layout (video left, content right)
+- `src/components/VideoPlayer.jsx` — ANSI frame loop from pre-rendered data
+- `src/components/TabBar.jsx` — bottom navigation bar
+- `src/sections/*.jsx` — content for each tab (NoticeBoard, SailingInstructions, RCLogs, Contact, Experience)
+- `src/sections.js` — section definitions shared across components
+- `src/frames.js` — loads pre-rendered frames from frames.bin
+- `prerender.py` — build-time script converting frames/*.jpg to frames.bin (ANSI text)
+- `provision.sh` — VPS provisioning script for deployment
+- `converter.py` — legacy script for single-image ASCII conversion
 
-## Architecture Notes
+## Architecture
 
-The project is early-stage with a single script. The natural next step is processing the `frames/` directory sequentially to produce ASCII animations. The `ascii_magic` library wraps Pillow and accepts file paths, PIL Image objects, or URLs via `AsciiArt.from_image()`.
+- **SSH layer**: Node.js `ssh2` server accepts all connections (public portfolio), spawns an Ink render context per session
+- **TUI**: Ink 5 (React for CLIs) with split-panel layout — ASCII video left, content sections right, tab bar bottom
+- **Video**: 328 JPEG frames pre-rendered to ANSI color text at build time (`prerender.py` → `frames.bin`), loaded and looped at runtime
+- **Navigation**: Arrow keys switch sections, `q` to quit
