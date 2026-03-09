@@ -1,0 +1,13 @@
+.worktrees/
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+htmlcov/
+.coverage
+frames.bin
+.ssh/
+node_modules/
