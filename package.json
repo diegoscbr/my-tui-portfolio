@@ -1,0 +1,44 @@
+{
+  "name": "my-tui-portfolio",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server.js",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+  },
+  "dependencies": {
+    "cfonts": "^3.3.1",
+    "ink": "^5.2.1",
+    "react": "^18.3.1",
+    "ssh2": "^1.15.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "@babel/preset-react": "^7.23.3",
+    "babel-jest": "^29.7.0",
+    "ink-testing-library": "^4.0.0",
+    "jest": "^29.7.0",
+    "tsx": "^4.21.0"
+  },
+  "jest": {
+    "extensionsToTreatAsEsm": [
+      ".jsx"
+    ],
+    "transform": {
+      "^.+\\.jsx?$": [
+        "babel-jest",
+        {
+          "rootMode": "upward"
+        }
+      ]
+    },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(ink-testing-library|ink|ansi-escapes|ansi-styles|chalk|strip-ansi|is-unicode-supported|log-symbols|figures|ora|cli-cursor|cli-spinners|restore-cursor|onetime|mimic-fn|signal-exit|get-east-asian-width|yoga-wasm-web)/)"
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
+    "testEnvironment": "node"
+  }
+}
