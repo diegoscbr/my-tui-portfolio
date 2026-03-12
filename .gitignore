@@ -11,3 +11,4 @@ htmlcov/
 frames.bin
 .ssh/
 node_modules/
+.superpowers/

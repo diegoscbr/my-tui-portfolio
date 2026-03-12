@@ -8,54 +8,61 @@ An SSH-accessible terminal portfolio at `diego.boats` with a sailing regatta the
 
 **Architecture**: Hetzner VPS → Wish (Go SSH server) → spawns per-connection Node.js Ink TUI process. Python is build-time only (pre-renders video frames to ANSI text).
 
-The project is currently in **pre-implementation** — only the Python frame tools, design doc, and implementation plan exist. The Node.js/Ink TUI and SSH server have not been built yet.
+The project is in **pre-implementation** — only Python frame tools, design docs, and implementation plans exist. The Node.js/Ink TUI and SSH server have not been built yet.
 
 ## Environment Setup
 
-Python 3.14 virtualenv (`.venv/`):
+Python 3.14 virtualenv (`.venv/`). The system `python` command may not exist — use `python3`:
 
 ```bash
 source .venv/bin/activate
 pip install ascii_magic pillow
 ```
 
+System dependency for video processing: `brew install ffmpeg`
+
 ## Running
 
 ```bash
 # Static image → ASCII (outputs to terminal + ascii_img.html)
-python converter.py
+python3 converter.py
 
 # Play 328-frame ASCII video in terminal (24 FPS, auto-fits terminal)
-python player.py              # auto-detect columns
-python player.py -c 120      # force 120 columns
+python3 player.py              # auto-detect columns
+python3 player.py -c 120      # force 120 columns
 ```
 
 `player.py` pre-converts all frames on startup (takes a few seconds), then loops playback. Controls: `↑/k` scroll up, `↓/j` scroll down, `q/ESC` quit.
 
 ## Key Dependencies
 
-- `ascii_magic` — converts images to ASCII/ANSI art via `AsciiArt.from_image()`. Uses `Modes.TERMINAL` for ANSI color output. Internal method `_img_to_art()` used directly in `player.py` for raw string output.
+- `ascii_magic` — converts images to ASCII/ANSI art via `AsciiArt.from_image()`. Uses `Modes.TERMINAL` for 256-color ANSI output. Internal method `_img_to_art()` used in `player.py` for raw string output.
 - `Pillow` — image processing, required by ascii_magic.
+- `ffmpeg` — system dependency for MP4→JPEG frame extraction (used by the ascii-player build pipeline).
 
-## Planned Architecture (from docs/plans/)
+## Active Development: ascii-player
 
-The implementation plan (`docs/plans/2026-03-08-terminal-portfolio-plan.md`) has 11 tasks:
+The current focus is building a general-purpose CLI tool (`ascii_player/` package) that converts any MP4 to multi-resolution ASCII art and plays it in the terminal. Design and plan docs:
 
-1. **prerender.py** — batch-convert `frames/*.jpg` → `frames.bin` (serialized ANSI strings)
-2. **Node.js project** — Ink 5, ink-big-text, ssh2 dependencies
-3. **SSH server** — Wish-based, auto host key management, port 22
-4. **Layout component** — split-panel Ink TUI
-5. **VideoPlayer** — loads `frames.bin`, loops ANSI frames
-6. **TabBar** — section navigation (←/→, enter, q)
-7. **Section components** — NoticeBoard, SailingInstructions, RCLogs, Contact, Experience
-8. **App.jsx** — wire everything together
-9. **VPS provisioning** — Hetzner Ubuntu setup script
-10. **DNS** — `diego.boats` A record via Vercel DNS
-11. **GitHub repo** — push and configure
+- **Design**: `docs/plans/2026-03-09-ascii-player-design.md`
+- **Plan**: `docs/plans/2026-03-09-ascii-player-plan.md` (12 tasks, TDD)
+
+Key concepts:
+- CLI subcommands: `python3 -m ascii_player build video.mp4` and `python3 -m ascii_player run video.mp4`
+- Multi-resolution cache at `~/.cache/ascii-player/<sha256>/` with resolutions [60, 80, 120, 160, 200, 250]
+- Pickle format with pre-split lines for fast deserialization
+- SIGWINCH-based terminal resize detection, snaps to best cached resolution
+- 5 modules: `__main__.py` (CLI), `build.py` (ffmpeg + pre-render), `cache.py` (hash/lookup), `player.py` (playback), `renderer.py` (ascii_magic wrapper)
+
+## Planned Terminal Portfolio (future)
+
+The older plan (`docs/plans/2026-03-08-terminal-portfolio-plan.md`) covers the full TUI portfolio: SSH server, Ink layout, tab navigation, content sections. This builds on top of the ascii-player once it's complete.
 
 ## File Roles
 
-- `converter.py` — simple one-off: converts `sailing.jpg` → terminal + HTML output
-- `player.py` — full TUI ASCII video player with scrolling, raw terminal mode, ANSI escape codes
+- `converter.py` — one-off: converts `sailing.jpg` → terminal + HTML output
+- `profile.py` — one-off: image processing experiments with Pillow/ascii_magic
+- `player.py` — TUI ASCII video player (reference implementation for ascii-player package)
 - `frames/` — 328 sequential JPEGs extracted from `sailing.MP4`
-- `docs/plans/` — design doc and implementation plan
+- `sailing.MP4` — source video for frame extraction
+- `docs/plans/` — design docs and implementation plans

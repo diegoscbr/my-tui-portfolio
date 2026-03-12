@@ -12,6 +12,28 @@
 
 ---
 
+## Task Boundary Validation Checklist
+
+**Run this after EVERY task commit, before starting the next task:**
+
+```bash
+# 1. ALL tests pass (not just the new ones)
+python -m pytest tests/ -v
+
+# 2. Coverage stays above 80%
+python -m pytest tests/ --cov=ascii_player --cov-report=term-missing
+
+# 3. Package imports cleanly
+python -c "import ascii_player"
+
+# 4. CLI doesn't crash (after Task 7+)
+python -m ascii_player --help
+```
+
+If any check fails, fix it before moving on. Do not skip a red check.
+
+---
+
 ## Task 1: Project Scaffolding
 
 **Files:**
@@ -229,7 +251,64 @@ def render_frame(image_path: Path, columns: int) -> str:
 Run: `python -m pytest tests/test_renderer.py -v`
 Expected: all 5 PASS
 
-**Step 5: Commit**
+**Step 5: Write edge-case tests**
+
+Append to `tests/test_renderer.py`:
+
+```python
+class TestRendererEdgeCases:
+    def test_corrupt_jpeg(self, tmp_path):
+        """Should raise or handle gracefully on corrupt image data."""
+        bad_file = tmp_path / "corrupt.jpg"
+        bad_file.write_bytes(b"not a jpeg at all")
+        with pytest.raises(Exception):
+            render_frame(bad_file, columns=20)
+
+    def test_png_input(self, tmp_path):
+        """Should handle PNG files (ascii_magic supports them)."""
+        from PIL import Image
+        png_path = tmp_path / "test.png"
+        img = Image.new("RGB", (20, 20), color=(0, 128, 255))
+        img.save(png_path, "PNG")
+        result = render_frame(png_path, columns=20)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_tiny_1x1_image(self, tmp_path):
+        """Should not crash on a 1x1 pixel image."""
+        from PIL import Image
+        tiny_path = tmp_path / "tiny.jpg"
+        img = Image.new("RGB", (1, 1), color=(255, 0, 0))
+        img.save(tiny_path, "JPEG")
+        result = render_frame(tiny_path, columns=20)
+        assert isinstance(result, str)
+
+    def test_large_image(self, tmp_path):
+        """Should handle a large image without crashing."""
+        from PIL import Image
+        large_path = tmp_path / "large.jpg"
+        img = Image.new("RGB", (4000, 3000), color=(0, 255, 0))
+        img.save(large_path, "JPEG")
+        result = render_frame(large_path, columns=80)
+        assert isinstance(result, str)
+        assert len(result) > 100
+
+    def test_very_narrow_columns(self, tmp_path):
+        """Should handle extremely narrow column widths."""
+        from PIL import Image
+        img_path = tmp_path / "narrow_test.jpg"
+        img = Image.new("RGB", (100, 100), color=(128, 128, 128))
+        img.save(img_path, "JPEG")
+        result = render_frame(img_path, columns=5)
+        assert isinstance(result, str)
+```
+
+**Step 6: Run all renderer tests including edge cases**
+
+Run: `python -m pytest tests/test_renderer.py -v`
+Expected: all PASS
+
+**Step 7: Commit**
 
 ```bash
 git add ascii_player/renderer.py tests/test_renderer.py
@@ -332,7 +411,43 @@ def compute_hash(video_path: Path) -> str:
 Run: `python -m pytest tests/test_cache.py::TestComputeHash -v`
 Expected: all 4 PASS
 
-**Step 5: Commit**
+**Step 5: Write edge-case tests for hashing**
+
+Append to `tests/test_cache.py`:
+
+```python
+class TestComputeHashEdgeCases:
+    def test_empty_file(self, tmp_path):
+        """Hash of an empty file should still return valid hex."""
+        f = tmp_path / "empty.mp4"
+        f.write_bytes(b"")
+        result = compute_hash(f)
+        assert len(result) == 64
+
+    def test_large_file_chunked(self, tmp_path):
+        """File larger than CHUNK_SIZE should hash correctly."""
+        f = tmp_path / "big.mp4"
+        # Write 100KB of data (larger than 8KB chunk size)
+        f.write_bytes(b"x" * 100_000)
+        h1 = compute_hash(f)
+        h2 = compute_hash(f)
+        assert h1 == h2  # deterministic
+
+    def test_symlink_hashes_target(self, tmp_path):
+        """Symlink should hash the target file content."""
+        real = tmp_path / "real.mp4"
+        real.write_bytes(b"real content")
+        link = tmp_path / "link.mp4"
+        link.symlink_to(real)
+        assert compute_hash(link) == compute_hash(real)
+```
+
+**Step 6: Run all cache hash tests**
+
+Run: `python -m pytest tests/test_cache.py -v`
+Expected: all PASS
+
+**Step 7: Commit**
 
 ```bash
 git add ascii_player/cache.py tests/test_cache.py
@@ -605,7 +720,69 @@ def invalidate(video_path: Path, base_dir: Path | None = None) -> None:
 Run: `python -m pytest tests/test_cache.py -v`
 Expected: all tests PASS (TestComputeHash + new classes)
 
-**Step 5: Commit**
+**Step 5: Write edge-case tests for cache operations**
+
+Append to `tests/test_cache.py`:
+
+```python
+class TestCacheEdgeCases:
+    def test_truncated_pickle_raises(self, fake_video, tmp_cache):
+        """Truncated pickle file should raise on load."""
+        video_hash = compute_hash(fake_video)
+        cache_dir = tmp_cache / video_hash
+        cache_dir.mkdir()
+        # Write manifest so get_cache_dir works
+        manifest = {"fps": 24, "frame_count": 1, "resolutions": [80]}
+        save_manifest(cache_dir, manifest)
+        # Write truncated pickle
+        (cache_dir / "res_80.bin").write_bytes(b"\x80\x05\x95")  # incomplete pickle
+        with pytest.raises(Exception):
+            load_resolution(fake_video, 80, base_dir=tmp_cache)
+
+    def test_manifest_with_missing_resolution_file(self, fake_video, tmp_cache):
+        """Manifest lists resolution but file doesn't exist."""
+        video_hash = compute_hash(fake_video)
+        cache_dir = tmp_cache / video_hash
+        cache_dir.mkdir()
+        manifest = {"fps": 24, "frame_count": 1, "resolutions": [80, 120]}
+        save_manifest(cache_dir, manifest)
+        # Only create res_80, not res_120
+        frames = [["line1"]]
+        save_resolution(cache_dir, 80, frames)
+        # res_80 should load fine
+        assert load_resolution(fake_video, 80, base_dir=tmp_cache) == frames
+        # res_120 should raise with helpful message
+        with pytest.raises(FileNotFoundError, match="res_120.bin"):
+            load_resolution(fake_video, 120, base_dir=tmp_cache)
+
+    def test_concurrent_reads(self, populated_cache, tmp_cache):
+        """Multiple reads of same resolution should not conflict."""
+        _, video, _ = populated_cache
+        from concurrent.futures import ThreadPoolExecutor
+        def load():
+            return load_resolution(video, 80, base_dir=tmp_cache)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(lambda _: load(), range(10)))
+        assert all(r == results[0] for r in results)
+
+    def test_best_resolution_single_available(self):
+        """Should work with only one resolution cached."""
+        assert best_resolution([80], terminal_cols=200) == 80
+        assert best_resolution([80], terminal_cols=40) == 80
+
+    def test_invalidate_twice_is_safe(self, populated_cache, tmp_cache):
+        """Double invalidation should not raise."""
+        _, video, _ = populated_cache
+        invalidate(video, base_dir=tmp_cache)
+        invalidate(video, base_dir=tmp_cache)  # should be noop
+```
+
+**Step 6: Run all cache tests**
+
+Run: `python -m pytest tests/test_cache.py -v`
+Expected: all PASS
+
+**Step 7: Commit**
 
 ```bash
 git add ascii_player/cache.py tests/test_cache.py
@@ -798,7 +975,64 @@ def extract_frames(video_path: Path, output_dir: Path, fps: int) -> int:
 Run: `python -m pytest tests/test_build.py -v`
 Expected: all tests PASS
 
-**Step 5: Commit**
+**Step 5: Write edge-case tests for ffmpeg extraction**
+
+Append to `tests/test_build.py`:
+
+```python
+class TestExtractFramesEdgeCases:
+    def test_ffmpeg_not_installed(self, tmp_path):
+        """Should raise RuntimeError with install instructions."""
+        with patch("ascii_player.build.shutil.which", return_value=None):
+            with pytest.raises(RuntimeError, match="brew install ffmpeg"):
+                extract_frames(tmp_path / "test.mp4", tmp_path / "out", fps=24)
+
+    def test_audio_only_mp4(self, tmp_path):
+        """ffmpeg should fail on audio-only input, we should surface the error."""
+        output_dir = tmp_path / "frames"
+        output_dir.mkdir()
+        with patch("ascii_player.build.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1,
+                stderr="Output file #0 does not contain any stream"
+            )
+            with pytest.raises(RuntimeError, match="ffmpeg failed"):
+                extract_frames(tmp_path / "audio.mp4", output_dir, fps=24)
+
+    def test_probe_fps_fractional(self, tmp_path):
+        """Should handle common fractional FPS like 29.97."""
+        with patch("ascii_player.build.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="30000/1001\n", returncode=0
+            )
+            fps = probe_fps(tmp_path / "ntsc.mp4")
+            assert abs(fps - 29.97) < 0.1
+
+    def test_probe_fps_integer(self, tmp_path):
+        """Should handle clean integer FPS."""
+        with patch("ascii_player.build.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="30/1\n", returncode=0
+            )
+            fps = probe_fps(tmp_path / "clean.mp4")
+            assert fps == 30.0
+
+    def test_probe_fps_garbage_output(self, tmp_path):
+        """Should default to 24 FPS on garbage ffprobe output."""
+        with patch("ascii_player.build.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="N/A\n", returncode=0
+            )
+            fps = probe_fps(tmp_path / "weird.mp4")
+            assert fps == 24.0
+```
+
+**Step 6: Run all build tests**
+
+Run: `python -m pytest tests/test_build.py -v`
+Expected: all PASS
+
+**Step 7: Commit**
 
 ```bash
 git add ascii_player/build.py tests/test_build.py
@@ -1050,7 +1284,65 @@ def build_video(
 Run: `python -m pytest tests/test_build.py -v`
 Expected: all tests PASS
 
-**Step 5: Commit**
+**Step 5: Write edge-case tests for pre-rendering**
+
+Append to `tests/test_build.py`:
+
+```python
+class TestPrerenderEdgeCases:
+    def test_empty_frames_dir_raises(self, tmp_path):
+        """Should raise if frames directory has no frame_*.jpg files."""
+        empty_dir = tmp_path / "empty_frames"
+        empty_dir.mkdir()
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        with pytest.raises(FileNotFoundError, match="No frame_"):
+            prerender_resolutions(empty_dir, cache_dir, resolutions=[80])
+
+    def test_single_frame_video(self, sample_frame, tmp_path):
+        """Should handle a video with only 1 frame."""
+        frames_dir = tmp_path / "frames"
+        frames_dir.mkdir()
+        import shutil
+        shutil.copy(sample_frame, frames_dir / "frame_0001.jpg")
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        prerender_resolutions(frames_dir, cache_dir, resolutions=[80])
+
+        import pickle
+        with open(cache_dir / "res_80.bin", "rb") as f:
+            frames = pickle.load(f)
+        assert len(frames) == 1
+
+    def test_frame_ordering_preserved(self, tmp_path):
+        """Frames should maintain their sequential order after parallel rendering."""
+        from PIL import Image
+        frames_dir = tmp_path / "frames"
+        frames_dir.mkdir()
+
+        for i in range(10):
+            img = Image.new("RGB", (20, 10), color=(i * 25, 0, 0))
+            img.save(frames_dir / f"frame_{i + 1:04d}.jpg", "JPEG")
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        prerender_resolutions(frames_dir, cache_dir, resolutions=[60])
+
+        import pickle
+        with open(cache_dir / "res_60.bin", "rb") as f:
+            frames = pickle.load(f)
+        assert len(frames) == 10
+        frame_strings = ["\n".join(f) for f in frames]
+        assert len(set(frame_strings)) > 1
+```
+
+**Step 6: Run all build tests**
+
+Run: `python -m pytest tests/test_build.py -v`
+Expected: all PASS
+
+**Step 7: Commit**
 
 ```bash
 git add ascii_player/build.py tests/test_build.py
@@ -1495,6 +1787,56 @@ Run: `python -m pytest tests/test_player.py -v`
 Expected: all tests PASS
 
 **Step 5: Commit**
+
+**Step 5: Write edge-case tests for player**
+
+Append to `tests/test_player.py`:
+
+```python
+class TestPlayerEdgeCases:
+    def test_build_frame_output_zero_terminal_rows(self):
+        """Should handle terminal_rows=0 without crashing."""
+        frame_lines = ["line1", "line2"]
+        output = build_frame_output(frame_lines, scroll_y=0, terminal_rows=0)
+        assert output == ""
+
+    def test_build_frame_output_empty_frame(self):
+        """Should handle a frame with no lines."""
+        output = build_frame_output([], scroll_y=0, terminal_rows=10)
+        assert output == ""
+
+    def test_build_frame_output_single_line(self):
+        """Should handle a single-line frame."""
+        output = build_frame_output(["only_line"], scroll_y=0, terminal_rows=5)
+        assert output == "only_line"
+
+    def test_state_with_single_frame(self):
+        """Player should loop a single-frame video without crashing."""
+        state = PlayerState(frames=[["one_frame"]], fps=24, resolution=80)
+        state.advance_frame()
+        assert state.frame_idx == 0  # wraps back
+
+    def test_build_frame_output_negative_scroll(self):
+        """Negative scroll_y should be treated as 0."""
+        frame_lines = ["a", "b", "c"]
+        output = build_frame_output(frame_lines, scroll_y=-5, terminal_rows=2)
+        # Negative index slicing is tricky — verify it shows from top
+        assert "a" in output
+
+    def test_very_narrow_terminal(self):
+        """20-column terminal (narrower than smallest 60-col resolution)."""
+        from ascii_player.cache import best_resolution
+        # Should still pick the smallest available
+        result = best_resolution([60, 80, 120], terminal_cols=20)
+        assert result == 60
+```
+
+**Step 6: Run all player tests**
+
+Run: `python -m pytest tests/test_player.py -v`
+Expected: all PASS
+
+**Step 7: Commit**
 
 ```bash
 git add ascii_player/player.py tests/test_player.py
