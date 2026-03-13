@@ -62,7 +62,7 @@ python3 player.py
 **Phase 3 — ASCII Art (Tasks 8.5-9)**
 - `scripts/build_ascii.py` — renders images via ascii_magic with configurable `char` param
 - Block element charset `" ░▒▓█"` with `diego_fixed.png` — retro pixel style
-- `ascii_art/<section>/placeholder.txt` — per-section placeholder art files
+- `ascii_art/<section>/art.txt` — per-section ASCII art files
 - `AsciiPanel` converts ANSI → Rich `Text.from_ansi()` for Textual containment
 
 **Tests**: 18 passing across `tests/test_app.py`, `test_tab_bar.py`, `test_ascii_panel.py`, `test_ssh_driver.py`, `test_server.py`

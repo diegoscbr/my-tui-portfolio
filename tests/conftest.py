@@ -21,7 +21,7 @@ def content_dir(tmp_path):
 
 @pytest.fixture
 def art_dir(tmp_path):
-    """Create a temporary ascii_art directory with placeholder files."""
+    """Create a temporary ascii_art directory with art.txt files per section."""
     art = tmp_path / "ascii_art"
     for section in [
         "notice-board",
@@ -32,5 +32,5 @@ def art_dir(tmp_path):
     ]:
         d = art / section
         d.mkdir(parents=True)
-        (d / "art.txt").write_text(f"  ~ {section} art ~  ")  # was placeholder.txt
+        (d / "art.txt").write_text(f"  ~ {section} art ~  ")
     return art

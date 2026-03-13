@@ -67,7 +67,7 @@ def build_notice_board() -> None:
         print(f"  Skipping notice-board: {frame} not found")
         return
 
-    build_from_image(frame, output_dir / "placeholder.txt")
+    build_from_image(frame, output_dir / "art.txt")
 
 
 def build_section(section: str) -> None:
@@ -80,7 +80,7 @@ def build_section(section: str) -> None:
         print(f"  Skipping {section}: no source.* image found")
         return
 
-    build_from_image(source_files[0], section_dir / "placeholder.txt")
+    build_from_image(source_files[0], section_dir / "art.txt")
 
 
 def main():
