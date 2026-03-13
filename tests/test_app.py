@@ -38,3 +38,18 @@ async def test_app_hides_warning_for_normal_terminal():
         assert warning.display is False
         main = pilot.app.query_one("#main-container")
         assert main.display is True
+
+
+@pytest.mark.asyncio
+async def test_help_overlay_toggles():
+    """Pressing ? should show help, pressing again should hide."""
+    from app import PortfolioApp
+
+    app = PortfolioApp()
+    async with app.run_test() as pilot:
+        # Help should be hidden initially
+        assert not pilot.app.query_one("#help-overlay").display
+        await pilot.press("question_mark")
+        assert pilot.app.query_one("#help-overlay").display
+        await pilot.press("question_mark")
+        assert not pilot.app.query_one("#help-overlay").display

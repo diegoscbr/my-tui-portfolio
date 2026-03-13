@@ -38,6 +38,11 @@ class PortfolioApp(App):
         Binding("right,l", "next_tab", "Next tab", show=False),
         Binding("j,down", "scroll_down", "Scroll down", show=False),
         Binding("k,up", "scroll_up", "Scroll up", show=False),
+        Binding("1", "jump_tab_1", show=False),
+        Binding("2", "jump_tab_2", show=False),
+        Binding("3", "jump_tab_3", show=False),
+        Binding("4", "jump_tab_4", show=False),
+        Binding("5", "jump_tab_5", show=False),
     ]
 
     def __init__(self, ssh_driver: SSHDriver | None = None, **kwargs):
@@ -70,10 +75,22 @@ class PortfolioApp(App):
             yield AsciiPanel(id="left-panel")
             yield ContentPanel(id="right-panel")
         yield TabBar(active_idx=0, id="footer-bar")
+        yield Static(
+            "Keybindings\n\n"
+            "  \u2190 \u2192 h l   Switch sections\n"
+            "  \u2191 \u2193 j k   Scroll content\n"
+            "  1-5        Jump to section\n"
+            "  Enter      Open item\n"
+            "  ESC h      Go back\n"
+            "  q          Quit\n"
+            "  ?          Toggle this help\n",
+            id="help-overlay",
+        )
 
     def on_mount(self) -> None:
         """Check terminal size on mount."""
         self._check_size()
+        self.query_one("#help-overlay").display = False
 
     def on_resize(self) -> None:
         """Re-check terminal size on resize."""
@@ -120,10 +137,22 @@ class PortfolioApp(App):
             self._active_idx += 1
             self._refresh_section()
 
+    def action_jump_tab_1(self) -> None: self._jump_to(0)
+    def action_jump_tab_2(self) -> None: self._jump_to(1)
+    def action_jump_tab_3(self) -> None: self._jump_to(2)
+    def action_jump_tab_4(self) -> None: self._jump_to(3)
+    def action_jump_tab_5(self) -> None: self._jump_to(4)
+
+    def _jump_to(self, idx: int) -> None:
+        """Jump directly to a section by index."""
+        if not self._in_detail and 0 <= idx < len(SECTIONS):
+            self._active_idx = idx
+            self._refresh_section()
+
     def action_toggle_help(self) -> None:
         """Toggle help overlay."""
-        # TODO: Phase 2 — implement help overlay
-        pass
+        overlay = self.query_one("#help-overlay")
+        overlay.display = not overlay.display
 
     def _refresh_section(self) -> None:
         """Update panels for the active section."""
