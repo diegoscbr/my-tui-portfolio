@@ -36,7 +36,10 @@ class ChannelFileWrapper:
         self._stream = stream
 
     def write(self, data: str) -> int:
-        self._stream.write(data)
+        try:
+            self._stream.write(data)
+        except (BrokenPipeError, OSError):
+            return 0
         return len(data)
 
     def flush(self) -> None:

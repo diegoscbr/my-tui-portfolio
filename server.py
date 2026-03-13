@@ -22,6 +22,9 @@ from collections import defaultdict
 
 import asyncssh
 
+from app import PortfolioApp
+from ssh_driver import SSHDriver
+
 logger = logging.getLogger("diego.boats")
 
 MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", "50"))
@@ -92,34 +95,44 @@ async def _handle_client(process: asyncssh.SSHServerProcess):
         if height == 0:
             height = 24
 
-        # TODO: Phase 1 Task 6 — wire up Textual app with SSHDriver here
-        # For now, send placeholder text
-        process.stdout.write("\x1b[2J\x1b[H")  # clear screen
-        process.stdout.write("Welcome to diego.boats!\r\n")
-        process.stdout.write("Portfolio coming soon...\r\n")
-        process.stdout.write("Press q to quit.\r\n")
+        # Create input queue for feeding SSH input to Textual
+        input_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-        # Idle timeout: disconnect after IDLE_TIMEOUT_SECONDS of no input
-        while True:
+        app = PortfolioApp()
+        driver = SSHDriver(
+            app,
+            output_stream=process.stdout,
+            input_queue=input_queue,
+            size=(width, height),
+        )
+        app._ssh_driver = driver
+
+        # Feed SSH stdin to the input queue in a background task
+        async def _feed_input():
             try:
-                data = await asyncio.wait_for(
-                    process.stdin.read(1024),
-                    timeout=IDLE_TIMEOUT_SECONDS,
-                )
-                if not data or "q" in data:
-                    break
-            except asyncio.TimeoutError:
-                process.stdout.write(
-                    "\r\n  Idle too long — disconnecting in 30 seconds...\r\n"
-                )
-                try:
+                while True:
                     data = await asyncio.wait_for(
-                        process.stdin.read(1024), timeout=30
+                        process.stdin.read(1024),
+                        timeout=IDLE_TIMEOUT_SECONDS,
                     )
-                    if data:
-                        continue  # User woke up, reset timeout
-                except asyncio.TimeoutError:
-                    break  # Final timeout — disconnect
+                    if not data:
+                        break
+                    await input_queue.put(data)
+            except (asyncio.TimeoutError, asyncssh.BreakReceived):
+                pass
+            finally:
+                await input_queue.put(None)  # Signal EOF
+
+        input_task = asyncio.create_task(_feed_input())
+
+        try:
+            await app.run_async()
+        finally:
+            input_task.cancel()
+            try:
+                await input_task
+            except asyncio.CancelledError:
+                pass
     finally:
         _session_semaphore.release()
         process.exit(0)

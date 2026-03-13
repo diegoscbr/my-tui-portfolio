@@ -4,8 +4,13 @@ Main Textual app for diego.boats terminal portfolio.
 Split-panel layout: ASCII art on the left, markdown content on the right,
 tab navigation along the bottom. Tokyo Night Dark theme.
 """
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
+from textual.driver import Driver
 from textual.widgets import Static
 from textual.binding import Binding
 
@@ -13,6 +18,9 @@ from config import SECTIONS
 from widgets.ascii_panel import AsciiPanel
 from widgets.tab_bar import TabBar
 from widgets.content_panel import ContentPanel
+
+if TYPE_CHECKING:
+    from ssh_driver import SSHDriver
 
 MIN_WIDTH = 80
 MIN_HEIGHT = 24
@@ -32,10 +40,24 @@ class PortfolioApp(App):
         Binding("k,up", "scroll_up", "Scroll up", show=False),
     ]
 
-    def __init__(self, **kwargs):
+    def __init__(self, ssh_driver: SSHDriver | None = None, **kwargs):
         super().__init__(**kwargs)
+        self._ssh_driver = ssh_driver
         self._active_idx = 0
         self._in_detail = False
+
+    def _build_driver(
+        self,
+        headless: bool,
+        inline: bool,
+        mouse: bool,
+        size: tuple[int, int] | None,
+    ) -> Driver:
+        """Use injected SSH driver if available, otherwise default."""
+        if self._ssh_driver is not None:
+            self._driver = self._ssh_driver
+            return self._ssh_driver
+        return super()._build_driver(headless, inline, mouse, size)
 
     def compose(self) -> ComposeResult:
         # Size warning (hidden when terminal is large enough)
