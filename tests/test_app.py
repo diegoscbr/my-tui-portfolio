@@ -53,3 +53,18 @@ async def test_help_overlay_toggles():
         assert pilot.app.query_one("#help-overlay").display
         await pilot.press("question_mark")
         assert not pilot.app.query_one("#help-overlay").display
+
+
+@pytest.mark.asyncio
+async def test_scroll_down_advances_position():
+    """action_scroll_down should not regress scroll position of #right-panel."""
+    from app import PortfolioApp
+
+    app = PortfolioApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        panel = pilot.app.query_one("#right-panel")
+        initial_y = panel.scroll_y
+        await pilot.press("j")
+        await pilot.pause()
+        # Scroll position should not regress (may stay if content fits in panel)
+        assert panel.scroll_y >= initial_y

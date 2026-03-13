@@ -23,8 +23,17 @@ Screen {
 #right-panel {
     width: 55%;
     height: 100%;
-    padding: 1 2;
     overflow-y: auto;
+}
+
+#hero-title {
+    width: 100%;
+    margin-bottom: 1;
+    display: none;
+}
+
+#section-content {
+    padding: 1 2;
 }
 
 #footer-bar {

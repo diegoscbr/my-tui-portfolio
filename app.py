@@ -161,7 +161,8 @@ class PortfolioApp(App):
         art_text = load_section_art(ART_ROOT / section.art_path)
         self.query_one("#left-panel", AsciiPanel).update_art(art_text)
         self.query_one("#right-panel", ContentPanel).show_content(
-            f"# {section.label}\n\nPlaceholder content for {section.label}."
+            f"# {section.label}\n\nPlaceholder content for {section.label}.",
+            section_id=section.id,
         )
         self.query_one("#footer-bar", TabBar).set_active(self._active_idx)
 
