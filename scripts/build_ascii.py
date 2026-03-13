@@ -10,6 +10,7 @@ Usage:
     python3 scripts/build_ascii.py --section contact  # build one section
 """
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -70,6 +71,23 @@ def build_notice_board() -> None:
     build_from_image(frame, output_dir / "art.txt")
 
 
+def build_hero() -> None:
+    """Render DIEGO (Terrace) + ESCOBAR (RubiFont) and write hero.txt."""
+    fonts_dir = PROJECT_ROOT / "scripts" / "fonts"
+    output_path = ART_ROOT / "notice-board" / "hero.txt"
+
+    diego = subprocess.check_output(
+        ["figlet", "-f", str(fonts_dir / "Terrace.flf"), "DIEGO"],
+        text=True,
+    )
+    escobar = subprocess.check_output(
+        ["figlet", "-f", str(fonts_dir / "RubiFont.flf"), "ESCOBAR"],
+        text=True,
+    )
+    output_path.write_text(diego + "---ESCOBAR---\n" + escobar)
+    print("  Built notice-board/hero.txt")
+
+
 def build_section(section: str) -> None:
     """Build art for a single section from its source image."""
     section_dir = ART_ROOT / section
@@ -96,10 +114,12 @@ def main():
     if args.section:
         if args.section == "notice-board":
             build_notice_board()
+            build_hero()
         else:
             build_section(args.section)
     else:
         build_notice_board()
+        build_hero()
         for section in ["sailing-instructions", "rc-logs", "contact", "experience"]:
             build_section(section)
 

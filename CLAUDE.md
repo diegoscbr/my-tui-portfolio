@@ -19,7 +19,9 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-System dependency for video processing: `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Linux).
+System dependencies:
+- `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Linux) — video processing
+- `brew install figlet` (macOS) or `apt install figlet` (Linux) — hero art build
 
 ## Running
 

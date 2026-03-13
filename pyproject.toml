@@ -10,6 +10,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+build = [
+    "ascii_magic>=2.3.0",
+    "pillow>=10.0.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
