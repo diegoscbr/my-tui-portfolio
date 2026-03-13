@@ -51,7 +51,7 @@ def build_from_image(image_path: Path, output_path: Path) -> None:
     """Convert a single image to ANSI text using braille characters."""
     art = AsciiArt.from_image(str(image_path))
     ansi_text = art._img_to_art(
-        columns=COLUMNS, mode=Modes.TERMINAL, char="·", width_ratio=2.2
+        columns=COLUMNS, mode=Modes.TERMINAL, char=" ░▒▓█", width_ratio=2.2
     )
     output_path.write_text(ansi_text)
     print(f"  Built {output_path.relative_to(ART_ROOT)}")
@@ -62,7 +62,7 @@ def build_notice_board() -> None:
     output_dir = ART_ROOT / "notice-board"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    frame = FRAMES_DIR / "frame_0001.jpg"
+    frame = PROJECT_ROOT / "diego_fixed.png"
     if not frame.exists():
         print(f"  Skipping notice-board: {frame} not found")
         return
