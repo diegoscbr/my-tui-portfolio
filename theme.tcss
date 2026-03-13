@@ -17,6 +17,7 @@ Screen {
     height: 100%;
     border-right: solid #3b4261;
     overflow: hidden;
+    content-align: center middle;
 }
 
 #right-panel {

@@ -15,7 +15,7 @@ from textual.widgets import Static
 from textual.binding import Binding
 
 from config import SECTIONS
-from widgets.ascii_panel import AsciiPanel
+from widgets.ascii_panel import AsciiPanel, ART_ROOT, load_section_art
 from widgets.tab_bar import TabBar
 from widgets.content_panel import ContentPanel
 
@@ -91,6 +91,7 @@ class PortfolioApp(App):
         """Check terminal size on mount."""
         self._check_size()
         self.query_one("#help-overlay").display = False
+        self._refresh_section()
 
     def on_resize(self) -> None:
         """Re-check terminal size on resize."""
@@ -157,9 +158,8 @@ class PortfolioApp(App):
     def _refresh_section(self) -> None:
         """Update panels for the active section."""
         section = SECTIONS[self._active_idx]
-        self.query_one("#left-panel", AsciiPanel).update_art(
-            f"  ~ {section.label} art ~  "
-        )
+        art_text = load_section_art(ART_ROOT / section.art_path)
+        self.query_one("#left-panel", AsciiPanel).update_art(art_text)
         self.query_one("#right-panel", ContentPanel).show_content(
             f"# {section.label}\n\nPlaceholder content for {section.label}."
         )
