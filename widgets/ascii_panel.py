@@ -8,13 +8,11 @@ ART_ROOT = Path(__file__).parent.parent / "ascii_art"
 
 
 def load_section_art(art_dir: Path) -> str:
-    """Load the first .txt file from an art directory."""
-    if not art_dir.exists():
+    """Load art.txt from an art directory. Returns fallback if missing."""
+    art_file = art_dir / "art.txt"
+    if not art_file.exists():
         return "  ~ no art available ~  "
-    txt_files = sorted(art_dir.glob("*.txt"))
-    if not txt_files:
-        return "  ~ no art available ~  "
-    return txt_files[0].read_text()
+    return art_file.read_text()
 
 
 class AsciiPanel(Static):

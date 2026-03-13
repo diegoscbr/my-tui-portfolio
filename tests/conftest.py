@@ -32,5 +32,5 @@ def art_dir(tmp_path):
     ]:
         d = art / section
         d.mkdir(parents=True)
-        (d / "placeholder.txt").write_text(f"  ~ {section} art ~  ")
+        (d / "art.txt").write_text(f"  ~ {section} art ~  ")  # was placeholder.txt
     return art
