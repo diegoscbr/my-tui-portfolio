@@ -41,7 +41,7 @@ def load_frames(columns):
     for i, path in enumerate(frame_paths):
         print(f"\rConverting frames: {i + 1}/{total}", end="", flush=True)
         art = AsciiArt.from_image(str(path))
-        frames.append(art._img_to_art(columns=columns, mode=Modes.TERMINAL))
+        frames.append(art._img_to_art(columns=columns, mode=Modes.TERMINAL, char=" ░▒▓█", width_ratio=2.2))
 
     print(f"\nDone — {total} frames ready.")
     return frames

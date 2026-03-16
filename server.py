@@ -4,9 +4,8 @@ asyncssh SSH server for diego.boats terminal portfolio.
 Accepts SSH connections on port 22 (configurable), spawns an isolated
 Textual app per session using the custom SSHDriver.
 
-Relies on asyncssh for all SSH protocol handling, including malformed
-input, unsupported features, and binary garbage — asyncssh's defaults
-handle these gracefully.
+Uses SSHServerSession (not process_factory) for raw keystroke access
+and window-change notifications — required for a TUI over SSH.
 
 Usage:
     python3 server.py                    # port 22
@@ -29,7 +28,6 @@ logger = logging.getLogger("diego.boats")
 
 MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", "50"))
 RATE_LIMIT_PER_IP = 5  # connections per minute
-IDLE_TIMEOUT_SECONDS = 600  # 10 minutes
 HOST_KEY_PATH = Path(".ssh/host_key")
 
 # Shared state — asyncio.Semaphore is safe for concurrent coroutines
@@ -60,8 +58,89 @@ async def _cleanup_rate_limits():
             del _ip_connections[ip]
 
 
+class PortfolioSession(asyncssh.SSHServerSession):
+    """One session = one Textual app instance.
+
+    Uses SSHServerSession instead of process_factory so we get:
+    - data_received() for raw keystrokes (no line-editor buffering)
+    - window_change_received() for terminal resize
+    """
+
+    def __init__(self):
+        self._chan = None
+        self._app = None
+        self._driver = None
+        self._input_queue: asyncio.Queue = asyncio.Queue()
+        self._width = 80
+        self._height = 24
+        self._app_task = None
+
+    def connection_made(self, chan):
+        self._chan = chan
+
+    def pty_requested(self, term_type, term_size, term_modes):
+        w, h = term_size[0], term_size[1]
+        self._width = w if w > 0 else 80
+        self._height = h if h > 0 else 24
+        return True
+
+    def shell_requested(self):
+        return True
+
+    def session_started(self):
+        self._app_task = asyncio.create_task(self._run_app())
+
+    def data_received(self, data, datatype):
+        """Feed raw input to the Textual input queue."""
+        if data:
+            text = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else data
+            self._input_queue.put_nowait(text)
+
+    def window_change_received(self, width, height, pixwidth, pixheight):
+        """Handle terminal resize — update driver and post Resize event."""
+        w = width if width > 0 else 80
+        h = height if height > 0 else 24
+        if self._driver:
+            self._driver.set_size(w, h)
+
+    def eof_received(self):
+        self._input_queue.put_nowait(None)
+        return False
+
+    def connection_lost(self, exc):
+        self._input_queue.put_nowait(None)
+        if self._app_task and not self._app_task.done():
+            self._app_task.cancel()
+
+    async def _run_app(self):
+        """Launch the Textual app for this session."""
+        if _session_semaphore.locked():
+            self._chan.write(
+                b"\r\n  Harbor's full! Too many sailors aboard.\r\n"
+                b"  Try again in a moment.\r\n\r\n"
+            )
+            self._chan.exit(1)
+            return
+
+        await _session_semaphore.acquire()
+        try:
+            self._app = PortfolioApp()
+            self._driver = SSHDriver(
+                self._app,
+                output_stream=self._chan,
+                input_queue=self._input_queue,
+                size=(self._width, self._height),
+                mouse=False,
+            )
+            self._app._ssh_driver = self._driver
+            await self._app.run_async()
+        finally:
+            _session_semaphore.release()
+            self._chan.exit(0)
+
+
 class PortfolioSSHServer(asyncssh.SSHServer):
-    """SSH server that accepts all connections (no auth)."""
+    """SSH server — no auth required (public portfolio)."""
 
     def connection_made(self, conn):
         self._conn = conn
@@ -72,70 +151,11 @@ class PortfolioSSHServer(asyncssh.SSHServer):
         return False  # No auth required — public portfolio
 
     def session_requested(self):
-        return True
-
-
-async def _handle_client(process: asyncssh.SSHServerProcess):
-    """Handle a single SSH session — spawn Textual app with SSHDriver."""
-    if _session_semaphore.locked():
-        process.stdout.write(
-            "\r\n  Harbor's full! Too many sailors aboard.\r\n"
-            "  Try again in a moment.\r\n\r\n"
-        )
-        process.exit(1)
-        return
-    await _session_semaphore.acquire()
-
-    try:
-        # Get terminal dimensions from PTY (handle 0x0 edge case from mosh etc.)
-        width = process.get_terminal_size()[0] or 80
-        height = process.get_terminal_size()[1] or 24
-        if width == 0:
-            width = 80
-        if height == 0:
-            height = 24
-
-        # Create input queue for feeding SSH input to Textual
-        input_queue: asyncio.Queue[str | None] = asyncio.Queue()
-
-        app = PortfolioApp()
-        driver = SSHDriver(
-            app,
-            output_stream=process.stdout,
-            input_queue=input_queue,
-            size=(width, height),
-        )
-        app._ssh_driver = driver
-
-        # Feed SSH stdin to the input queue in a background task
-        async def _feed_input():
-            try:
-                while True:
-                    data = await asyncio.wait_for(
-                        process.stdin.read(1024),
-                        timeout=IDLE_TIMEOUT_SECONDS,
-                    )
-                    if not data:
-                        break
-                    await input_queue.put(data)
-            except (asyncio.TimeoutError, asyncssh.BreakReceived):
-                pass
-            finally:
-                await input_queue.put(None)  # Signal EOF
-
-        input_task = asyncio.create_task(_feed_input())
-
-        try:
-            await app.run_async()
-        finally:
-            input_task.cancel()
-            try:
-                await input_task
-            except asyncio.CancelledError:
-                pass
-    finally:
-        _session_semaphore.release()
-        process.exit(0)
+        ip = self._conn.get_extra_info("peername")[0]
+        if not _check_rate_limit(ip):
+            logger.warning("Rate limit exceeded for %s", ip)
+            return False
+        return PortfolioSession()
 
 
 def _ensure_host_key(host_key_path: Path) -> None:
@@ -164,7 +184,7 @@ async def create_server(
         "",
         port,
         server_host_keys=[str(host_key_path)],
-        process_factory=_handle_client,
+        encoding=None,  # Binary mode — PortfolioSession handles encoding
     )
     actual_port = server.sockets[0].getsockname()[1]
     logger.info(

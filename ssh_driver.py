@@ -22,6 +22,7 @@ from textual import events
 from textual.app import App
 from textual.driver import Driver
 from textual.drivers._writer_thread import WriterThread
+from textual._xterm_parser import XTermParser
 from textual.geometry import Size
 
 
@@ -37,7 +38,12 @@ class ChannelFileWrapper:
 
     def write(self, data: str) -> int:
         try:
-            self._stream.write(data)
+            encoded: str | bytes = data.encode("utf-8") if isinstance(data, str) else data
+            try:
+                self._stream.write(encoded)
+            except TypeError:
+                # Stream is text-mode (e.g. StringIO in tests) — write as str
+                self._stream.write(encoded.decode("utf-8") if isinstance(encoded, bytes) else encoded)
         except (BrokenPipeError, OSError):
             return 0
         return len(data)
@@ -111,7 +117,8 @@ class SSHDriver(Driver):
 
         self.write("\x1b[?1049h")  # alt screen
         self.write("\x1b[?25l")  # hide cursor
-        self.write("\x1b[?1003h")  # mouse tracking (if enabled)
+        if self._mouse:
+            self.write("\x1b[?1003h")  # mouse tracking
 
         size = Size(self._size[0], self._size[1])
         self._app.post_message(events.Resize(size, size))
@@ -123,7 +130,8 @@ class SSHDriver(Driver):
             self._input_thread.start()
 
     def _run_input_thread(self) -> None:
-        """Read input from the asyncio queue and feed to Textual's parser."""
+        """Read input from the asyncio queue and feed to Textual's XTermParser."""
+        parser = XTermParser(self._debug)
         loop = asyncio.new_event_loop()
         try:
             while not self._exit_event.is_set():
@@ -135,10 +143,11 @@ class SSHDriver(Driver):
                     )
                     if data is None:
                         break
-                    for event in self._app._parser(data):
+                    for event in parser.feed(data):
                         self.process_message(event)
                 except asyncio.TimeoutError:
-                    continue
+                    for event in parser.tick():
+                        self.process_message(event)
         finally:
             loop.close()
 
@@ -150,7 +159,8 @@ class SSHDriver(Driver):
         """Restore terminal state and clean up threads."""
         self._exit_event.set()
 
-        self.write("\x1b[?1003l")  # disable mouse tracking
+        if self._mouse:
+            self.write("\x1b[?1003l")  # disable mouse tracking
         self.write("\x1b[?25h")  # show cursor
         self.write("\x1b[?1049l")  # exit alt screen
 

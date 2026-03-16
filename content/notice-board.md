@@ -1,10 +1,11 @@
 ---
-title: "Diego Escobar"
+title: "Hello, world."
 ---
 
-## builder · sailor · maker
+## Welcome
 
-A developer who builds cool things and sails when the wind is right.
+As a software engineer I believe software should be personalized and highly accessible. 
 
-This portfolio is itself a project — an SSH-accessible TUI built with
-Python and Textual, themed after the open water.
+The freelance and personal projects here illustrate exactly what I mean by that. You will also see my unfiltered thoughts, passions, and ambitions.
+
+Currently helping non-technical teams turn ideas into working solutions @ PMG.

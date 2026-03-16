@@ -84,7 +84,7 @@ def build_hero() -> None:
         ["figlet", "-f", str(fonts_dir / "RubiFont.flf"), "ESCOBAR"],
         text=True,
     )
-    output_path.write_text(diego + "---ESCOBAR---\n" + escobar)
+    output_path.write_text(diego.rstrip("\n") + "\n---ESCOBAR---\n" + escobar)
     print("  Built notice-board/hero.txt")
 
 
