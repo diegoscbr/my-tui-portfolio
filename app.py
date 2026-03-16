@@ -48,6 +48,8 @@ class PortfolioApp(App):
         Binding("3", "jump_tab_3", show=False),
         Binding("4", "jump_tab_4", show=False),
         Binding("5", "jump_tab_5", show=False),
+        Binding("enter", "open_item", show=False),
+        Binding("escape", "go_back", show=False),
     ]
 
     def __init__(self, ssh_driver: SSHDriver | None = None, **kwargs):
@@ -55,6 +57,7 @@ class PortfolioApp(App):
         self._ssh_driver = ssh_driver
         self._active_idx = 0
         self._in_detail = False
+        self._selected_item_idx = 0
         self._content: dict = {}
 
     def _build_driver(
@@ -161,6 +164,26 @@ class PortfolioApp(App):
         """Toggle help overlay."""
         overlay = self.query_one("#help-overlay")
         overlay.display = not overlay.display
+
+    def action_open_item(self) -> None:
+        """Open selected item in detail view (directory sections only)."""
+        section = SECTIONS[self._active_idx]
+        content = self._content.get(section.id)
+        if isinstance(content, list) and content and not self._in_detail:
+            self._in_detail = True
+            item = content[self._selected_item_idx]
+            panel = self.query_one("#right-panel", ContentPanel)
+            panel.show_content(
+                f"# {item.title}\n\n{item.body}",
+                section_id=section.id,
+            )
+
+    def action_go_back(self) -> None:
+        """Go back from detail view to list. Does nothing at top level."""
+        if self._in_detail:
+            self._in_detail = False
+            self._selected_item_idx = 0
+            self._refresh_section()
 
     def _load_all_content(self) -> None:
         """Load all section content from disk."""

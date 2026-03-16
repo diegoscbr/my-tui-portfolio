@@ -68,3 +68,48 @@ async def test_scroll_down_advances_position():
         await pilot.pause()
         # Scroll position should not regress (may stay if content fits in panel)
         assert panel.scroll_y >= initial_y
+
+
+@pytest.mark.asyncio
+async def test_enter_opens_detail_view():
+    """Enter on a directory section should set _in_detail=True."""
+    from app import PortfolioApp
+
+    app = PortfolioApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("2")      # Sailing Instructions (is_directory=True)
+        await pilot.pause()
+        assert not pilot.app._in_detail
+        await pilot.press("enter")
+        await pilot.pause()
+        assert pilot.app._in_detail
+
+
+@pytest.mark.asyncio
+async def test_escape_returns_from_detail():
+    """ESC should return from detail view to list."""
+    from app import PortfolioApp
+
+    app = PortfolioApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("2")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert pilot.app._in_detail
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not pilot.app._in_detail
+
+
+@pytest.mark.asyncio
+async def test_escape_does_nothing_at_top_level():
+    """ESC at top level should not change active section."""
+    from app import PortfolioApp
+
+    app = PortfolioApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        await pilot.pause()
+        assert pilot.app._active_idx == 0
+        assert not pilot.app._in_detail
