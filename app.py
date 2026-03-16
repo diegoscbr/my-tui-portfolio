@@ -14,10 +14,15 @@ from textual.driver import Driver
 from textual.widgets import Static
 from textual.binding import Binding
 
+from pathlib import Path
+
 from config import SECTIONS
+from content_loader import load_single_content, load_directory_content, ContentItem
 from widgets.ascii_panel import AsciiPanel, ART_ROOT, load_section_art
 from widgets.tab_bar import TabBar
 from widgets.content_panel import ContentPanel
+
+CONTENT_ROOT = Path(__file__).parent / "content"
 
 if TYPE_CHECKING:
     from ssh_driver import SSHDriver
@@ -50,6 +55,7 @@ class PortfolioApp(App):
         self._ssh_driver = ssh_driver
         self._active_idx = 0
         self._in_detail = False
+        self._content: dict = {}
 
     def _build_driver(
         self,
@@ -88,9 +94,10 @@ class PortfolioApp(App):
         )
 
     def on_mount(self) -> None:
-        """Check terminal size on mount."""
+        """Check terminal size on mount and load content."""
         self._check_size()
         self.query_one("#help-overlay").display = False
+        self._load_all_content()
         self._refresh_section()
 
     def on_resize(self) -> None:
@@ -155,16 +162,47 @@ class PortfolioApp(App):
         overlay = self.query_one("#help-overlay")
         overlay.display = not overlay.display
 
+    def _load_all_content(self) -> None:
+        """Load all section content from disk."""
+        for section in SECTIONS:
+            path = CONTENT_ROOT / section.content_path
+            if section.is_directory:
+                self._content[section.id] = load_directory_content(path)
+            else:
+                if path.exists():
+                    self._content[section.id] = load_single_content(path)
+                else:
+                    self._content[section.id] = ContentItem(
+                        title=section.label,
+                        body="No content yet.",
+                    )
+
     def _refresh_section(self) -> None:
         """Update panels for the active section."""
         section = SECTIONS[self._active_idx]
         art_text = load_section_art(ART_ROOT / section.art_path)
         self.query_one("#left-panel", AsciiPanel).update_art(art_text)
-        self.query_one("#right-panel", ContentPanel).show_content(
-            f"# {section.label}\n\nPlaceholder content for {section.label}.",
-            section_id=section.id,
-        )
         self.query_one("#footer-bar", TabBar).set_active(self._active_idx)
+
+        content = self._content.get(section.id)
+        panel = self.query_one("#right-panel", ContentPanel)
+
+        if isinstance(content, list):
+            if not content:
+                panel.show_content(f"# {section.label}\n\nNo content yet.", section_id=section.id)
+            else:
+                md = f"# {section.label}\n\n"
+                for item in content:
+                    md += f"**{item.title}**\n"
+                    if item.description:
+                        md += f"{item.description}\n"
+                    if item.tags:
+                        md += f"*{', '.join(item.tags)}*\n"
+                    md += "\n"
+                panel.show_content(md, section_id=section.id)
+        else:
+            item = content or ContentItem(title=section.label, body="No content yet.")
+            panel.show_content(f"# {item.title}\n\n{item.body}", section_id=section.id)
 
 
 if __name__ == "__main__":
